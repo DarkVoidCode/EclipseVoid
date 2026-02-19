@@ -1,0 +1,168 @@
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+
+local Window = Rayfield:CreateWindow({
+   Name = "Elite Script | RayField Hub",
+   LoadingTitle = "Carregando Versão Final...",
+   LoadingSubtitle = "por Gemini AI",
+   ConfigurationSaving = { Enabled = true, FolderName = "EliteConfig", FileName = "MainConfig" },
+   KeySystem = true, 
+   KeySettings = {
+      Title = "Sistema de Verificação",
+      Subtitle = "Passe pelo Lootlab para continuar",
+      Note = "Chave: Void",
+      FileName = "KeyScript", 
+      SaveKey = true, 
+      GrabKeyFromSite = false,
+      Key = {"Void"}, 
+      Url = "" 
+   }
+})
+
+-- // VARIÁVEIS GLOBAIS //
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local RunService = game:GetService("RunService")
+local Camera = workspace.CurrentCamera
+local UserInputService = game:GetService("UserInputService")
+
+local AimbotEnabled = false
+local ShowFOV = false
+local ESP_Config = { Chams = false, Tracers = false, Names = false, Distance = false }
+
+-- // CÍRCULO DO FOV //
+local FOVCircle = Drawing.new("Circle")
+FOVCircle.Thickness = 2
+FOVCircle.Color = Color3.fromRGB(255, 255, 255)
+FOVCircle.Filled = false
+FOVCircle.Transparency = 1
+FOVCircle.Visible = false
+
+-- // FUNÇÕES DE FILTRO E VISIBILIDADE //
+local function IsEnemy(Player)
+    if Player == LocalPlayer then return false end
+    if Player.Team ~= nil and Player.Team == LocalPlayer.Team then return false end
+    return true
+end
+
+local function IsVisible(TargetPart)
+    local Params = RaycastParams.new()
+    Params.FilterType = Enum.RaycastFilterType.Exclude
+    Params.FilterDescendantsInstances = {LocalPlayer.Character, Camera}
+    local Origin = Camera.CFrame.Position
+    local Direction = (TargetPart.Position - Origin).Unit * (TargetPart.Position - Origin).Magnitude
+    local Result = workspace:Raycast(Origin, Direction, Params)
+    return Result == nil or Result.Instance:IsDescendantOf(TargetPart.Parent)
+end
+
+-- // SISTEMA DE ESP //
+local function CreateESP(Player)
+    local tracer = Drawing.new("Line")
+    local nameTag = Drawing.new("Text")
+    local distTag = Drawing.new("Text")
+
+    RunService.RenderStepped:Connect(function()
+        if Player.Character and Player.Character:FindFirstChild("HumanoidRootPart") and IsEnemy(Player) then
+            local HRP = Player.Character.HumanoidRootPart
+            local Pos, OnScreen = Camera:WorldToViewportPoint(HRP.Position)
+
+            if OnScreen then
+                tracer.Visible = ESP_Config.Tracers
+                tracer.From = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+                tracer.To = Vector2.new(Pos.X, Pos.Y)
+                tracer.Color = Color3.fromRGB(255, 255, 255)
+
+                nameTag.Visible = ESP_Config.Names
+                nameTag.Text = Player.Name
+                nameTag.Position = Vector2.new(Pos.X, Pos.Y - 30)
+                nameTag.Center = true
+                nameTag.Outline = true
+                nameTag.Size = 16
+
+                distTag.Visible = ESP_Config.Distance
+                local dist = math.floor((LocalPlayer.Character.HumanoidRootPart.Position - HRP.Position).Magnitude)
+                distTag.Text = tostring(dist) .. " studs"
+                distTag.Position = Vector2.new(Pos.X, Pos.Y - 15)
+                distTag.Center = true
+                distTag.Outline = true
+                
+                local h = Player.Character:FindFirstChild("EliteCham")
+                if ESP_Config.Chams then
+                    if not h then
+                        h = Instance.new("Highlight", Player.Character)
+                        h.Name = "EliteCham"
+                    end
+                    h.Enabled = true
+                    h.FillColor = Color3.fromRGB(255, 0, 0)
+                elseif h then
+                    h.Enabled = false
+                end
+            else
+                tracer.Visible = false; nameTag.Visible = false; distTag.Visible = false
+                if Player.Character:FindFirstChild("EliteCham") then Player.Character.EliteCham.Enabled = false end
+            end
+        else
+            tracer.Visible = false; nameTag.Visible = false; distTag.Visible = false
+        end
+    end)
+end
+
+for _, v in pairs(Players:GetPlayers()) do CreateESP(v) end
+Players.PlayerAdded:Connect(CreateESP)
+
+-- // ABA 1: COMBATE //
+local TabCombate = Window:CreateTab("Combate!", 4483362458)
+
+TabCombate:CreateToggle({
+   Name = "Ativar Aimbot",
+   CurrentValue = false,
+   Callback = function(Value) AimbotEnabled = Value end,
+})
+
+TabCombate:CreateToggle({
+   Name = "Fov (Círculo)",
+   CurrentValue = false,
+   Callback = function(Value)
+      ShowFOV = Value
+      FOVCircle.Visible = Value
+   end,
+})
+
+-- // ABA 2: ESP //
+local TabESP = Window:CreateTab("Esp!", 4483345998)
+
+TabESP:CreateToggle({Name = "Cham", CurrentValue = false, Callback = function(V) ESP_Config.Chams = V end})
+TabESP:CreateToggle({Name = "Tracer", CurrentValue = false, Callback = function(V) ESP_Config.Tracers = V end})
+TabESP:CreateToggle({Name = "Nome", CurrentValue = false, Callback = function(V) ESP_Config.Names = V end})
+TabESP:CreateToggle({Name = "Distance", CurrentValue = false, Callback = function(V) ESP_Config.Distance = V end})
+
+-- // LOOP PRINCIPAL //
+RunService.RenderStepped:Connect(function()
+    if ShowFOV then
+        FOVCircle.Position = UserInputService:GetMouseLocation()
+        FOVCircle.Radius = 100
+    end
+
+    if AimbotEnabled then
+        local target = nil
+        local shortestDistance = math.huge
+
+        for _, player in pairs(Players:GetPlayers()) do
+            if IsEnemy(player) and player.Character and player.Character:FindFirstChild("Head") then
+                local head = player.Character.Head
+                local pos, onScreen = Camera:WorldToViewportPoint(head.Position)
+                
+                if onScreen and IsVisible(head) then 
+                    local distance = (Vector2.new(pos.X, pos.Y) - UserInputService:GetMouseLocation()).Magnitude
+                    if distance < shortestDistance and distance <= (ShowFOV and 100 or math.huge) then
+                        target = head
+                        shortestDistance = distance
+                    end
+                end
+            end
+        end
+
+        if target and UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) then
+            Camera.CFrame = CFrame.new(Camera.CFrame.Position, target.Position)
+        end
+    end
+end)
